@@ -140,6 +140,8 @@ const mcpHandler = createMcpHandler(
     basePath: "/api",
     maxDuration: 60,
     verboseLogs: process.env.NODE_ENV !== "production",
+    disableSse: true,
+    redisUrl: "",
   },
 );
 

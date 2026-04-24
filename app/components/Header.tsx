@@ -36,6 +36,17 @@ export function Header({ title, rightSlot, theme }: HeaderProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <Link
+          href="/barber-demo"
+          aria-label="Open barber demo"
+          className={
+            isActive
+              ? "inline-flex items-center rounded-xl border-2 border-fuchsia-700 bg-fuchsia-700 px-3 py-2.5 text-sm font-extrabold uppercase tracking-wide text-white shadow-md transition hover:bg-fuchsia-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-400 focus:ring-offset-2 sm:rounded-2xl sm:px-5 sm:py-4 sm:text-lg"
+              : "inline-flex items-center rounded-xl border-2 border-fuchsia-300 bg-transparent px-3 py-2.5 text-sm font-extrabold uppercase tracking-wide text-fuchsia-200 shadow-md transition hover:bg-fuchsia-300/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-300 focus:ring-offset-2 focus:ring-offset-slate-950 sm:rounded-2xl sm:px-5 sm:py-4 sm:text-lg"
+          }
+        >
+          Barber Demo
+        </Link>
         {isActive ? (
           <Link
             href="/completed"

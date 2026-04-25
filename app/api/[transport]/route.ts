@@ -178,10 +178,17 @@ const mcpHandler = createMcpHandler(
       .min(7)
       .describe("Phone number (digits only, no + or dashes).");
 
+    // Convert NY time (Eastern Time) to UTC timestamp
     function dateTimeToTimestamp(date: string, time: string): number {
       const [y, m, d] = date.split("-").map(Number);
       const [hh, mm] = time.split(":").map(Number);
-      return Date.UTC(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0);
+      // Create a Date in NY timezone, get its UTC timestamp
+      const nyTimeString = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(
+        2,
+        "0"
+      )}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`;
+      const nyDate = new Date(nyTimeString + " America/New_York");
+      return nyDate.getTime();
     }
 
     // Convert UTC timestamp to Eastern Time (New York) for display

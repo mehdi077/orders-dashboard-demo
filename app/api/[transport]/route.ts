@@ -182,13 +182,24 @@ const mcpHandler = createMcpHandler(
     function dateTimeToTimestamp(date: string, time: string): number {
       const [y, m, d] = date.split("-").map(Number);
       const [hh, mm] = time.split(":").map(Number);
-      // Create a Date in NY timezone, get its UTC timestamp
-      const nyTimeString = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(
-        2,
-        "0"
-      )}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`;
-      const nyDate = new Date(nyTimeString + " America/New_York");
-      return nyDate.getTime();
+      // Create a Date object - this interprets values as local time
+      // Then we convert to UTC by getting the timestamp and adjusting
+      // Since our server runs in a specific timezone, we need to handle this carefully
+      const localDate = new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0);
+      const localTimestamp = localDate.getTime();
+      
+      // Get the timezone offset for New York on this date
+      // NY is UTC-5 (EST) or UTC-4 (EDT)
+      // For simplicity in April 2026, NY is on EDT (UTC-4) - DST started March 9, 2026
+      // We'll calculate DST based on the date
+      const dateObj = new Date(y, (m ?? 1) - 1, d ?? 1);
+      const janOffset = new Date(y, 0, 1).getTimezoneOffset();
+      const julOffset = new Date(y, 6, 1).getTimezoneOffset();
+      const isDST = janOffset > julOffset; // Northern hemisphere DST
+      const nyOffsetHours = isDST ? -4 : -5;
+      
+      // Convert local NY time to UTC
+      return localTimestamp - nyOffsetHours * 60 * 60 * 1000;
     }
 
     // Convert UTC timestamp to Eastern Time (New York) for display

@@ -184,9 +184,17 @@ const mcpHandler = createMcpHandler(
       return Date.UTC(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0);
     }
 
+    // Convert UTC timestamp to Eastern Time (New York) for display
     function timestampToTime(ms: number): string {
-      const d = new Date(ms);
-      return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+      // Use Intl to convert UTC to America/New_York timezone
+      const date = new Date(ms);
+      const nyTime = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(date);
+      return nyTime;
     }
 
     function overlaps(

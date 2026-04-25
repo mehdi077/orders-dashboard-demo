@@ -142,12 +142,41 @@ const mcpHandler = createMcpHandler(
       slotMinutes: 30,
     } as const;
 
+    // Normalize phone: strip non-digits
+    function normalizePhone(phone: string): string {
+      return phone.replace(/\D/g, "");
+    }
+
+    // Normalize date: handle Y-M-D or YYYY-M-D formats
+    function normalizeDate(date: string): string {
+      const parts = date.split("-").map((n) => parseInt(n, 10));
+      if (parts.length !== 3) throw new Error("Invalid date format.");
+      const [y, m, d] = parts;
+      return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
+
+    // Normalize time: handle H:MM or HH:M formats
+    function normalizeTime(time: string): string {
+      const parts = time.split(":").map((n) => parseInt(n, 10));
+      if (parts.length !== 2) throw new Error("Invalid time format.");
+      const [hh, mm] = parts;
+      return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    }
+
     const dateSchema = z
       .string()
-      .regex(DATE_RE, "Must be a calendar date in YYYY-MM-DD format.");
+      .min(1)
+      .describe("Calendar date in YYYY-MM-DD format (e.g., '2026-04-28').");
+
     const timeSchema = z
       .string()
-      .regex(TIME_RE, "Must be a 24-hour time in HH:MM format.");
+      .min(1)
+      .describe("Time in HH:MM 24-hour format (e.g., '14:30').");
+
+    const phoneNumberSchema = z
+      .string()
+      .min(7)
+      .describe("Phone number (digits only, no + or dashes).");
 
     function dateTimeToTimestamp(date: string, time: string): number {
       const [y, m, d] = date.split("-").map(Number);
@@ -175,9 +204,10 @@ const mcpHandler = createMcpHandler(
       },
       async ({ date }) => {
         const convex = getConvexClient();
+        const normalizedDate = normalizeDate(date);
         const appts = await convex.query(
           api.barberAppointments.listScheduledForDay,
-          { dayKey: date },
+          { dayKey: normalizedDate },
         );
         return {
           content: [
@@ -196,12 +226,12 @@ const mcpHandler = createMcpHandler(
 
     server.tool(
       "barber_find_appointments_by_phone",
-      "Find scheduled barber appointments for a given phone number (exact string match).",
+      "Find scheduled barber appointments for a given phone number (digits-only match).",
       {
         phoneNumber: z
           .string()
-          .min(1)
-          .describe("The client's phone number, exactly as it was stored."),
+          .min(7)
+          .describe("The client's phone number (digits only, no + or dashes)."),
         limit: z
           .number()
           .int()
@@ -212,9 +242,10 @@ const mcpHandler = createMcpHandler(
       },
       async ({ phoneNumber, limit }) => {
         const convex = getConvexClient();
+        const normalizedPhone = normalizePhone(phoneNumber);
         const results = await convex.query(
           api.barberAppointments.findByPhoneNumber,
-          { phoneNumber, limit },
+          { phoneNumber: normalizedPhone, limit },
         );
         return {
           content: [
@@ -267,8 +298,8 @@ const mcpHandler = createMcpHandler(
       "barber_create_appointment",
       "Book a new barber appointment. Rejects if the time overlaps an existing scheduled appointment on that day. Phone number is required.",
       {
-        date: dateSchema.describe("Day to book, in YYYY-MM-DD format."),
-        time: timeSchema.describe("Start time, 24-hour HH:MM (e.g. '14:30')."),
+        date: dateSchema.describe("Day to book, in YYYY-MM-DD format. Accepts Y-M-D or YYYY-M-D formats."),
+        time: timeSchema.describe("Start time, 24-hour HH:MM (e.g. '14:30'). Accepts H:MM or HH:M formats."),
         durationMinutes: z
           .number()
           .int()
@@ -276,10 +307,7 @@ const mcpHandler = createMcpHandler(
           .max(480)
           .describe("Appointment length in minutes (10-480)."),
         clientName: z.string().min(1).describe("Client's full name."),
-        phoneNumber: z
-          .string()
-          .min(1)
-          .describe("Client's phone number. Required."),
+        phoneNumber: phoneNumberSchema,
         service: z
           .string()
           .optional()
@@ -296,15 +324,21 @@ const mcpHandler = createMcpHandler(
         notes,
       }) => {
         const convex = getConvexClient();
-        const startTime = dateTimeToTimestamp(date, time);
+        const normalizedDate = normalizeDate(date);
+        const normalizedTime = normalizeTime(time);
+        const normalizedPhone = normalizePhone(phoneNumber);
+        if (normalizedPhone.length < 7) {
+          throw new Error("Phone number must have at least 7 digits.");
+        }
+        const startTime = dateTimeToTimestamp(normalizedDate, normalizedTime);
         const trimmedService = service?.trim();
         const trimmedNotes = notes?.trim();
         const id = await convex.mutation(api.barberAppointments.create, {
-          dayKey: date,
+          dayKey: normalizedDate,
           startTime,
           durationMinutes,
           clientName: clientName.trim(),
-          phoneNumber: phoneNumber.trim(),
+          phoneNumber: normalizedPhone,
           service:
             trimmedService && trimmedService.length > 0 ? trimmedService : undefined,
           notes: trimmedNotes && trimmedNotes.length > 0 ? trimmedNotes : undefined,
@@ -346,7 +380,7 @@ const mcpHandler = createMcpHandler(
           .max(480)
           .describe("Updated duration in minutes."),
         clientName: z.string().min(1).describe("Client's full name."),
-        phoneNumber: z.string().min(1).describe("Client's phone number. Required."),
+        phoneNumber: phoneNumberSchema,
         service: z.string().optional().describe("Optional service label."),
         notes: z.string().optional().describe("Optional free-form notes."),
       },
@@ -361,16 +395,22 @@ const mcpHandler = createMcpHandler(
         notes,
       }) => {
         const convex = getConvexClient();
-        const startTime = dateTimeToTimestamp(date, time);
+        const normalizedDate = normalizeDate(date);
+        const normalizedTime = normalizeTime(time);
+        const normalizedPhone = normalizePhone(phoneNumber);
+        if (normalizedPhone.length < 7) {
+          throw new Error("Phone number must have at least 7 digits.");
+        }
+        const startTime = dateTimeToTimestamp(normalizedDate, normalizedTime);
         const trimmedService = service?.trim();
         const trimmedNotes = notes?.trim();
         await convex.mutation(api.barberAppointments.update, {
           id: id as Id<"barberAppointments">,
-          dayKey: date,
+          dayKey: normalizedDate,
           startTime,
           durationMinutes,
           clientName: clientName.trim(),
-          phoneNumber: phoneNumber.trim(),
+          phoneNumber: normalizedPhone,
           service:
             trimmedService && trimmedService.length > 0 ? trimmedService : undefined,
           notes: trimmedNotes && trimmedNotes.length > 0 ? trimmedNotes : undefined,
@@ -383,11 +423,11 @@ const mcpHandler = createMcpHandler(
                 {
                   ok: true,
                   id,
-                  dayKey: date,
-                  time,
+                  dayKey: normalizedDate,
+                  time: normalizedTime,
                   durationMinutes,
                   clientName: clientName.trim(),
-                  phoneNumber: phoneNumber.trim(),
+                  phoneNumber: normalizedPhone,
                 },
                 null,
                 2,
@@ -424,7 +464,7 @@ const mcpHandler = createMcpHandler(
       "barber_next_available_slot",
       "Find the first free time slot on a given date that fits the requested duration, respecting the shop's business hours and existing appointments.",
       {
-        date: dateSchema.describe("Day to search, in YYYY-MM-DD format."),
+        date: dateSchema.describe("Day to search, in YYYY-MM-DD format. Accepts Y-M-D or YYYY-M-D formats."),
         durationMinutes: z
           .number()
           .int()
@@ -434,27 +474,29 @@ const mcpHandler = createMcpHandler(
         earliestTime: timeSchema
           .optional()
           .describe(
-            "Optional earliest start time HH:MM (e.g. '10:00'). Defaults to business opening.",
+            "Optional earliest start time HH:MM (e.g. '10:00'). Accepts H:MM or HH:M formats. Defaults to business opening.",
           ),
       },
       async ({ date, durationMinutes, earliestTime }) => {
         const convex = getConvexClient();
+        const normalizedDate = normalizeDate(date);
+        const normalizedEarliestTime = earliestTime ? normalizeTime(earliestTime) : earliestTime;
         const appts = await convex.query(
           api.barberAppointments.listScheduledForDay,
-          { dayKey: date },
+          { dayKey: normalizedDate },
         );
 
         const { startHour, endHour, slotMinutes } = DEFAULT_BARBER_HOURS;
         const openMs = dateTimeToTimestamp(
-          date,
+          normalizedDate,
           `${String(startHour).padStart(2, "0")}:00`,
         );
         const closeMs = dateTimeToTimestamp(
-          date,
+          normalizedDate,
           `${String(endHour).padStart(2, "0")}:00`,
         );
-        const floor = earliestTime
-          ? Math.max(openMs, dateTimeToTimestamp(date, earliestTime))
+        const floor = normalizedEarliestTime
+          ? Math.max(openMs, dateTimeToTimestamp(normalizedDate, normalizedEarliestTime))
           : openMs;
         const durationMs = durationMinutes * 60_000;
         const stepMs = slotMinutes * 60_000;
@@ -472,7 +514,7 @@ const mcpHandler = createMcpHandler(
                   text: JSON.stringify(
                     {
                       ok: true,
-                      dayKey: date,
+                      dayKey: normalizedDate,
                       time: timestampToTime(t),
                       startTime: t,
                       durationMinutes,
@@ -494,7 +536,7 @@ const mcpHandler = createMcpHandler(
               text: JSON.stringify(
                 {
                   ok: false,
-                  dayKey: date,
+                  dayKey: normalizedDate,
                   error: "No slot available for that duration on this date.",
                   businessHours: DEFAULT_BARBER_HOURS,
                 },

@@ -179,23 +179,13 @@ const mcpHandler = createMcpHandler(
       .describe("Phone number (digits only, no + or dashes).");
 
     // Convert NY time (Eastern Time) to UTC timestamp
-    // The server runs in America/New_York timezone, so we need to handle this carefully
-    // When agent sends "2 PM", it means 2 PM NY time, which we need to convert to UTC
+    // Server runs in America/New_York (EDT, UTC-4)
+    // Agent sends "2 PM" = 2 PM NY time = 6 PM UTC
     function dateTimeToTimestamp(date: string, time: string): number {
       const [y, m, d] = date.split("-").map(Number);
       const [hh, mm] = time.split(":").map(Number);
-      
-      // Create a date using Date.UTC - this treats inputs as UTC
-      // Then we need to convert from NY local time to UTC
-      // NY is UTC-4 during DST (March-November), UTC-5 during standard time
-      // For April 2026, NY is on EDT (UTC-4)
-      
-      // The key insight: Date.UTC creates a UTC timestamp
-      // If agent says "2 PM", we want 2 PM NY = 6 PM UTC (during EDT)
-      const utcTimestamp = Date.UTC(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0);
-      
-      // NY is 4 hours behind UTC during EDT
-      return utcTimestamp - 4 * 60 * 60 * 1000; // Subtract 4 hours to get NY time in UTC
+      // Add 4 hours to convert NY time to UTC (EDT = UTC-4)
+      return Date.UTC(y, (m ?? 1) - 1, d ?? 1, (hh ?? 0) + 4, mm ?? 0, 0, 0);
     }
 
     // Convert UTC timestamp to Eastern Time (New York) for display

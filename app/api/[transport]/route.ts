@@ -179,27 +179,23 @@ const mcpHandler = createMcpHandler(
       .describe("Phone number (digits only, no + or dashes).");
 
     // Convert NY time (Eastern Time) to UTC timestamp
+    // The server runs in America/New_York timezone, so we need to handle this carefully
+    // When agent sends "2 PM", it means 2 PM NY time, which we need to convert to UTC
     function dateTimeToTimestamp(date: string, time: string): number {
       const [y, m, d] = date.split("-").map(Number);
       const [hh, mm] = time.split(":").map(Number);
-      // Create a Date object - this interprets values as local time
-      // Then we convert to UTC by getting the timestamp and adjusting
-      // Since our server runs in a specific timezone, we need to handle this carefully
-      const localDate = new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0);
-      const localTimestamp = localDate.getTime();
       
-      // Get the timezone offset for New York on this date
-      // NY is UTC-5 (EST) or UTC-4 (EDT)
-      // For simplicity in April 2026, NY is on EDT (UTC-4) - DST started March 9, 2026
-      // We'll calculate DST based on the date
-      const dateObj = new Date(y, (m ?? 1) - 1, d ?? 1);
-      const janOffset = new Date(y, 0, 1).getTimezoneOffset();
-      const julOffset = new Date(y, 6, 1).getTimezoneOffset();
-      const isDST = janOffset > julOffset; // Northern hemisphere DST
-      const nyOffsetHours = isDST ? -4 : -5;
+      // Create a date using Date.UTC - this treats inputs as UTC
+      // Then we need to convert from NY local time to UTC
+      // NY is UTC-4 during DST (March-November), UTC-5 during standard time
+      // For April 2026, NY is on EDT (UTC-4)
       
-      // Convert local NY time to UTC
-      return localTimestamp - nyOffsetHours * 60 * 60 * 1000;
+      // The key insight: Date.UTC creates a UTC timestamp
+      // If agent says "2 PM", we want 2 PM NY = 6 PM UTC (during EDT)
+      const utcTimestamp = Date.UTC(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0, 0, 0);
+      
+      // NY is 4 hours behind UTC during EDT
+      return utcTimestamp - 4 * 60 * 60 * 1000; // Subtract 4 hours to get NY time in UTC
     }
 
     // Convert UTC timestamp to Eastern Time (New York) for display

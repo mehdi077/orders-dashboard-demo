@@ -541,7 +541,7 @@ export default function OnboardingFormPage() {
           {/* Submit */}
           <div className="space-y-4 pb-12">
             <p className="text-sm text-gray-500 leading-relaxed">
-              If you have any questions or need assistance before submitting this form, please don't hesitate to reach out. We're happy to walk you through anything not covered here. Call us directly at <a href="tel:2673012303" className="font-semibold text-gray-900 underline">267-301-2303</a>.
+              If you have any questions or need assistance before submitting this form, please don&apos;t hesitate to reach out. We&apos;re happy to walk you through anything not covered here. Call us directly at <a href="tel:2673012303" className="font-semibold text-gray-900 underline">267-301-2303</a>.
             </p>
             <button
               type="submit"

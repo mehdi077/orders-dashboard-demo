@@ -43,11 +43,11 @@ export function PinAuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (pin: string) => {
       try {
-        const result: { valid: boolean; pinSet: boolean } = await convex.query(
+        const result: { valid: boolean } = await convex.query(
           api.pin.verifyPin,
           { pin },
         );
-        if (result.valid || !result.pinSet) {
+        if (result.valid) {
           setAuthenticated(true);
           sessionStorage.setItem(
             SESSION_KEY,

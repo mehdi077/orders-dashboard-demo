@@ -310,7 +310,7 @@ const mcpHandler = createMcpHandler(
 
     server.tool(
       "barber_create_appointment",
-      "Book a new barber appointment. The shop has multiple chairs — each chair has an independent schedule, so two appointments can overlap if they are on different chairs. IMPORTANT: Call barber_get_business_hours first to learn the number of chairs and valid chair numbers. If you don't specify a chair, it defaults to chair 1. To find an open slot on any chair, use barber_next_available_slot first and use the returned 'chair' value. Times are in New York / Eastern Time. Rejects if the time overlaps an existing appointment on the same chair. Phone number is required.",
+      "Book a new barber appointment. The shop has multiple chairs — each chair has an independent schedule, so two appointments can overlap if they are on different chairs. IMPORTANT: Before booking, use barber_check_availability to see which chairs are free at the desired time, or barber_next_available_slot to find the earliest open slot. If you don't specify a chair, it defaults to chair 1. Call barber_get_business_hours to learn the total number of chairs. Times are in New York / Eastern Time. Rejects if the time overlaps an existing appointment on the same chair. Phone number is required.",
       {
         date: dateSchema.describe("Day to book, in YYYY-MM-DD format. Accepts Y-M-D or YYYY-M-D formats."),
         time: timeSchema.describe("Start time in New York / Eastern Time, 24-hour HH:MM (e.g. '14:30'). Accepts H:MM or HH:M formats."),
@@ -519,8 +519,99 @@ const mcpHandler = createMcpHandler(
     );
 
     server.tool(
+      "barber_check_availability",
+      "Check which chairs are free or booked at a specific date, time, and duration. Returns a per-chair breakdown showing availability and any conflicting appointment. Use this when a customer requests a specific time and you need to know which chair to book, or when a customer wants a specific chair and you need to confirm it's free. Times are in New York / Eastern Time.",
+      {
+        date: dateSchema.describe("Date to check, in YYYY-MM-DD format."),
+        time: timeSchema.describe("Start time in New York / Eastern Time, 24-hour HH:MM (e.g. '14:30')."),
+        durationMinutes: z
+          .number()
+          .int()
+          .min(10)
+          .max(480)
+          .describe("Appointment length in minutes (10-480)."),
+      },
+      async ({ date, time, durationMinutes }) => {
+        const convex = getConvexClient();
+        const normalizedDate = normalizeDate(date);
+        const normalizedTime = normalizeTime(time);
+        const startTime = dateTimeToTimestamp(normalizedDate, normalizedTime);
+        const endTime = startTime + durationMinutes * 60_000;
+
+        const settings = await convex.query(api.barberAppointments.getBarberSettings, {});
+        const totalChairs = settings?.chairs ?? 1;
+        const startHour = settings?.startHour ?? FALLBACK_BARBER_HOURS.startHour;
+        const endHour = settings?.endHour ?? FALLBACK_BARBER_HOURS.endHour;
+
+        // Validate time is within business hours
+        const openMs = dateTimeToTimestamp(normalizedDate, `${String(startHour).padStart(2, "0")}:00`);
+        const closeMs = dateTimeToTimestamp(normalizedDate, `${String(endHour).padStart(2, "0")}:00`);
+        if (startTime < openMs || endTime > closeMs) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  {
+                    ok: false,
+                    error: `Requested time is outside business hours (${startHour}:00–${endHour}:00 ET).`,
+                    businessHours: { startHour, endHour },
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          };
+        }
+
+        const appts = await convex.query(
+          api.barberAppointments.listScheduledForDay,
+          { dayKey: normalizedDate },
+        );
+
+        const chairStatus = Array.from({ length: totalChairs }, (_, i) => {
+          const chairNum = i + 1;
+          const conflict = appts.find(
+            (a) => (a.chair ?? 1) === chairNum && overlaps({ startTime, endTime }, a),
+          );
+          return {
+            chair: chairNum,
+            available: !conflict,
+            conflict: conflict
+              ? { id: conflict._id, clientName: conflict.clientName, startTime: conflict.startTime, endTime: conflict.endTime }
+              : null,
+          };
+        });
+
+        const availableChairs = chairStatus.filter((c) => c.available).map((c) => c.chair);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  ok: true,
+                  dayKey: normalizedDate,
+                  time: normalizedTime,
+                  durationMinutes,
+                  totalChairs,
+                  availableChairs,
+                  chairs: chairStatus,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      },
+    );
+
+    server.tool(
       "barber_next_available_slot",
-      "Find the first free time slot on a given date that fits the requested duration, respecting the shop's business hours and existing appointments across all chairs. Returns the available time, the chair number, and business hours. Use the returned 'chair' value when calling barber_create_appointment. Checks each chair in order (1, 2, ...) and returns the first free slot on the earliest available chair.",
+      "Find the earliest free time slot on a given date that fits the requested duration, across all chairs. Only returns the first matching slot — use barber_check_availability instead when you need to see all available chairs at a specific time. Returns the time, chair number, and business hours. Use the returned 'chair' value when calling barber_create_appointment.",
       {
         date: dateSchema.describe("Day to search, in YYYY-MM-DD format. Accepts Y-M-D or YYYY-M-D formats."),
         durationMinutes: z

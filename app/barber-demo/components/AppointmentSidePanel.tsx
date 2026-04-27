@@ -16,6 +16,7 @@ type SubmitArgs = {
   phoneNumber: string;
   service?: string;
   notes?: string;
+  chair: number;
 };
 
 type Props = {

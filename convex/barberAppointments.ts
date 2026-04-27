@@ -26,6 +26,10 @@ function overlaps(
   return a.startTime < b.endTime && a.endTime > b.startTime;
 }
 
+function getBarberSettings(ctx: any) {
+  return ctx.db.get("barberSettings");
+}
+
 export const listScheduledInRange = query({
   args: { startTime: v.number(), endTime: v.number() },
   handler: async (ctx, args) => {
@@ -65,6 +69,49 @@ export const getById = query({
   },
 });
 
+export const getBarberSettings = query({
+  args: {},
+  handler: async (ctx, args) => {
+    const settings = await ctx.db.get("barberSettings");
+    if (!settings) {
+      // Return default settings if none exist
+      return {
+        chairs: 1,
+        startHour: 8,
+        endHour: 20,
+        slotMinutes: 30,
+      };
+    }
+    return settings;
+  },
+});
+
+export const updateBarberSettings = mutation({
+  args: {
+    chairs: v.number().min(1).max(20),
+    startHour: v.number().min(0).max(23),
+    endHour: v.number().min(1).max(24),
+    slotMinutes: v.number().min(5).max(120),
+  },
+  handler: async (ctx, args) => {
+    const settings = await ctx.db.get("barberSettings");
+    if (!settings) {
+      return await ctx.db.insert("barberSettings", {
+        chairs: args.chairs,
+        startHour: args.startHour,
+        endHour: args.endHour,
+        slotMinutes: args.slotMinutes,
+      });
+    }
+    return await ctx.db.patch(settings._id, {
+      chairs: args.chairs,
+      startHour: args.startHour,
+      endHour: args.endHour,
+      slotMinutes: args.slotMinutes,
+    });
+  },
+});
+
 export const findByPhoneNumber = query({
   args: { phoneNumber: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
@@ -87,6 +134,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
     startTime: v.number(),
     durationMinutes: v.number(),
+    chair: v.number().min(1).optional(),
   },
   handler: async (ctx, args) => {
     assertValidDurationMinutes(args.durationMinutes);
@@ -94,6 +142,13 @@ export const create = mutation({
     const now = Date.now();
     const endTime = args.startTime + args.durationMinutes * 60_000;
     assertValidTimes(args.startTime, endTime);
+
+    const settings = await getBarberSettings(ctx);
+    const maxChairs = settings ? settings.chairs : 1;
+    const chairNum = args.chair ?? 1;
+    if (chairNum < 1 || chairNum > maxChairs) {
+      throw new Error(`Chair must be between 1 and ${maxChairs}.`);
+    }
 
     const existing = await ctx.db
       .query("barberAppointments")
@@ -104,8 +159,8 @@ export const create = mutation({
       .take(200);
 
     for (const appt of existing) {
-      if (overlaps({ startTime: args.startTime, endTime }, appt)) {
-        throw new Error("This time overlaps another appointment.");
+      if (appt.chair === chairNum && overlaps({ startTime: args.startTime, endTime }, appt)) {
+        throw new Error(`This time overlaps another appointment on chair ${chairNum}.`);
       }
     }
 
@@ -117,6 +172,7 @@ export const create = mutation({
       phoneNumber: args.phoneNumber,
       service: args.service,
       notes: args.notes,
+      chair: chairNum,
       status: "scheduled",
       createdAt: now,
       updatedAt: now,
@@ -134,6 +190,7 @@ export const update = mutation({
     notes: v.optional(v.string()),
     startTime: v.number(),
     durationMinutes: v.number(),
+    chair: v.number().min(1).optional(),
   },
   handler: async (ctx, args) => {
     const current = await ctx.db.get(args.id);
@@ -148,6 +205,13 @@ export const update = mutation({
     const endTime = args.startTime + args.durationMinutes * 60_000;
     assertValidTimes(args.startTime, endTime);
 
+    const settings = await getBarberSettings(ctx);
+    const maxChairs = settings ? settings.chairs : 1;
+    const chairNum = args.chair ?? (current.chair ?? 1);
+    if (chairNum < 1 || chairNum > maxChairs) {
+      throw new Error(`Chair must be between 1 and ${maxChairs}.`);
+    }
+
     const existing = await ctx.db
       .query("barberAppointments")
       .withIndex("by_dayKey_and_status_and_startTime", (q) =>
@@ -158,8 +222,8 @@ export const update = mutation({
 
     for (const appt of existing) {
       if (appt._id === args.id) continue;
-      if (overlaps({ startTime: args.startTime, endTime }, appt)) {
-        throw new Error("This time overlaps another appointment.");
+      if (appt.chair === chairNum && overlaps({ startTime: args.startTime, endTime }, appt)) {
+        throw new Error(`This time overlaps another appointment on chair ${chairNum}.`);
       }
     }
 
@@ -171,6 +235,7 @@ export const update = mutation({
       phoneNumber: args.phoneNumber,
       service: args.service,
       notes: args.notes,
+      chair: chairNum,
       updatedAt: Date.now(),
     });
   },

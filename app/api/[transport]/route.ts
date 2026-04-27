@@ -308,7 +308,7 @@ const mcpHandler = createMcpHandler(
 
     server.tool(
       "barber_create_appointment",
-      "Book a new barber appointment. Rejects if the time overlaps an existing scheduled appointment on that day. Phone number is required.",
+      "Book a new barber appointment. Rejects if the time overlaps an existing scheduled appointment on that day for the same chair. Phone number is required.",
       {
         date: dateSchema.describe("Day to book, in YYYY-MM-DD format. Accepts Y-M-D or YYYY-M-D formats."),
         time: timeSchema.describe("Start time, 24-hour HH:MM (e.g. '14:30'). Accepts H:MM or HH:M formats."),
@@ -325,6 +325,13 @@ const mcpHandler = createMcpHandler(
           .optional()
           .describe("Optional service label, e.g. 'Fade + Beard'."),
         notes: z.string().optional().describe("Optional free-form notes."),
+        chair: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .optional()
+          .describe("Optional chair number (1-20). If omitted, the first available chair is used."),
       },
       async ({
         date,
@@ -334,6 +341,7 @@ const mcpHandler = createMcpHandler(
         phoneNumber,
         service,
         notes,
+        chair,
       }) => {
         const convex = getConvexClient();
         const normalizedDate = normalizeDate(date);
@@ -345,6 +353,14 @@ const mcpHandler = createMcpHandler(
         const startTime = dateTimeToTimestamp(normalizedDate, normalizedTime);
         const trimmedService = service?.trim();
         const trimmedNotes = notes?.trim();
+        
+        const settings = await convex.query(api.barberAppointments.getBarberSettings, {});
+        const maxChairs = settings ? settings.chairs : 1;
+        const chairNum = chair ?? 1;
+        if (chairNum < 1 || chairNum > maxChairs) {
+          throw new Error(`Chair must be between 1 and ${maxChairs}.`);
+        }
+        
         const id = await convex.mutation(api.barberAppointments.create, {
           dayKey: normalizedDate,
           startTime,
@@ -354,6 +370,7 @@ const mcpHandler = createMcpHandler(
           service:
             trimmedService && trimmedService.length > 0 ? trimmedService : undefined,
           notes: trimmedNotes && trimmedNotes.length > 0 ? trimmedNotes : undefined,
+          chair: chairNum,
         });
         return {
           content: [
@@ -368,6 +385,7 @@ const mcpHandler = createMcpHandler(
                   durationMinutes,
                   clientName: clientName.trim(),
                   phoneNumber: phoneNumber.trim(),
+                  chair: chairNum,
                 },
                 null,
                 2,
@@ -395,6 +413,13 @@ const mcpHandler = createMcpHandler(
         phoneNumber: phoneNumberSchema,
         service: z.string().optional().describe("Optional service label."),
         notes: z.string().optional().describe("Optional free-form notes."),
+        chair: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .optional()
+          .describe("Optional chair number (1-20)."),
       },
       async ({
         id,
@@ -405,6 +430,7 @@ const mcpHandler = createMcpHandler(
         phoneNumber,
         service,
         notes,
+        chair,
       }) => {
         const convex = getConvexClient();
         const normalizedDate = normalizeDate(date);
@@ -416,6 +442,14 @@ const mcpHandler = createMcpHandler(
         const startTime = dateTimeToTimestamp(normalizedDate, normalizedTime);
         const trimmedService = service?.trim();
         const trimmedNotes = notes?.trim();
+        const chairNum = chair ?? 1;
+        
+        const settings = await convex.query(api.barberAppointments.getBarberSettings, {});
+        const maxChairs = settings ? settings.chairs : 1;
+        if (chairNum < 1 || chairNum > maxChairs) {
+          throw new Error(`Chair must be between 1 and ${maxChairs}.`);
+        }
+        
         await convex.mutation(api.barberAppointments.update, {
           id: id as Id<"barberAppointments">,
           dayKey: normalizedDate,
@@ -426,6 +460,7 @@ const mcpHandler = createMcpHandler(
           service:
             trimmedService && trimmedService.length > 0 ? trimmedService : undefined,
           notes: trimmedNotes && trimmedNotes.length > 0 ? trimmedNotes : undefined,
+          chair: chairNum,
         });
         return {
           content: [
@@ -440,6 +475,7 @@ const mcpHandler = createMcpHandler(
                   durationMinutes,
                   clientName: clientName.trim(),
                   phoneNumber: normalizedPhone,
+                  chair: chairNum,
                 },
                 null,
                 2,

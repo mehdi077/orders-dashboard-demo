@@ -19,12 +19,14 @@ type SubmitArgs = {
   phoneNumber: string;
   service?: string;
   notes?: string;
+  chair: number;
 };
 
 type Props = {
   day: Date;
   initial?: Appointment | null;
   businessHours: BusinessHours;
+  chairs: number;
   dayAppointments: Appointment[];
   onSubmit: (args: SubmitArgs) => Promise<void>;
   onCancel?: () => void;
@@ -36,6 +38,7 @@ export function AppointmentForm({
   day,
   initial,
   businessHours,
+  chairs,
   dayAppointments,
   onSubmit,
   onCancel,
@@ -51,6 +54,10 @@ export function AppointmentForm({
     if (!initial) return businessHours.slotMinutes;
     return Math.max(10, Math.round((initial.endTime - initial.startTime) / 60_000));
   })();
+  const initialChair = (() => {
+    if (!initial) return 1;
+    return initial.chair ?? 1;
+  })();
 
   const [time, setTime] = useState(initialTime);
   const [durationMinutes, setDurationMinutes] = useState<number>(initialDur);
@@ -58,6 +65,7 @@ export function AppointmentForm({
   const [phoneNumber, setPhoneNumber] = useState(initial?.phoneNumber ?? "");
   const [service, setService] = useState(initial?.service ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [chair, setChair] = useState<number>(initialChair);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -71,8 +79,9 @@ export function AppointmentForm({
         durationMinutes,
         dayAppointments,
         excludeId: initial?._id ?? null,
+        chair,
       }),
-    [day, businessHours, durationMinutes, dayAppointments, initial?._id],
+    [day, businessHours, durationMinutes, dayAppointments, initial?._id, chair],
   );
 
   // Auto-pick a slot when current selection is no longer valid.
@@ -135,6 +144,7 @@ export function AppointmentForm({
         phoneNumber: phone,
         service: service.trim() || undefined,
         notes: notes.trim() || undefined,
+        chair,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -164,7 +174,7 @@ export function AppointmentForm({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <label className="block">
           <span className="text-[11px] font-bold uppercase tracking-widest text-slate-300">
             Duration
@@ -201,6 +211,22 @@ export function AppointmentForm({
                 </option>
               ))
             )}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-slate-300">
+            Chair
+          </span>
+          <select
+            value={chair}
+            onChange={(e) => setChair(Number(e.target.value))}
+            className={inputCls}
+          >
+            {Array.from({ length: chairs }, (_, i) => i + 1).map((c) => (
+              <option key={c} value={c}>
+                Chair {c}
+              </option>
+            ))}
           </select>
         </label>
       </div>

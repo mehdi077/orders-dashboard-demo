@@ -13,6 +13,14 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
   }).index("by_status_createdAt", ["status", "createdAt"]),
 
+  // barberSettings: single row to store shop configuration
+  barberSettings: defineTable({
+    chairs: v.number().min(1).max(20),
+    startHour: v.number().min(0).max(23),
+    endHour: v.number().min(1).max(24),
+    slotMinutes: v.number().min(5).max(120),
+  }),
+
   barberAppointments: defineTable({
     dayKey: v.string(), // e.g. "2026-04-24" in the user's local calendar
     startTime: v.number(), // epoch ms
@@ -21,6 +29,7 @@ export default defineSchema({
     phoneNumber: v.optional(v.string()),
     service: v.optional(v.string()),
     notes: v.optional(v.string()),
+    chair: v.number().optional(),
     status: v.union(v.literal("scheduled"), v.literal("cancelled")),
     createdAt: v.number(),
     updatedAt: v.number(),

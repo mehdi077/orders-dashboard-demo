@@ -11,6 +11,7 @@ type Props = {
   appointments: Appointment[];
   startHour: number;
   endHour: number;
+  chairs: number;
   selectedId?: string | null;
   onSelectAppointment: (a: Appointment) => void;
   hourHeight?: number;
@@ -20,6 +21,7 @@ export function DayTimelineVertical({
   appointments,
   startHour,
   endHour,
+  chairs,
   selectedId,
   onSelectAppointment,
   hourHeight = 44,
@@ -27,6 +29,7 @@ export function DayTimelineVertical({
   const workHours = Math.max(1, endHour - startHour);
   const totalHeight = workHours * hourHeight;
   const hours = Array.from({ length: workHours }, (_, i) => startHour + i);
+  const chairWidth = 100 / chairs;
 
   return (
     <div className="relative w-full" style={{ height: totalHeight }}>
@@ -64,6 +67,9 @@ export function DayTimelineVertical({
           const rawHeight = durHours * hourHeight;
           const height = Math.max(22, Math.min(totalHeight - top, rawHeight));
           const isSelected = selectedId && a._id === selectedId;
+          const chairIndex = (a.chair ?? 1) - 1;
+          const left = chairIndex * chairWidth;
+          const width = chairWidth - 2;
 
           return (
             <button
@@ -73,14 +79,14 @@ export function DayTimelineVertical({
                 e.stopPropagation();
                 onSelectAppointment(a);
               }}
-              style={{ top, height }}
+              style={{ top, height, left: `${left}%`, width: `${width}%` }}
               className={[
-                "group absolute left-1.5 right-1.5 overflow-hidden rounded-lg px-2.5 py-1 text-left shadow-md ring-1 transition-all duration-150",
+                "group absolute overflow-hidden rounded-lg px-2.5 py-1 text-left shadow-md ring-1 transition-all duration-150",
                 "bg-gradient-to-r from-fuchsia-600/85 to-indigo-600/85 ring-white/20 hover:from-fuchsia-500 hover:to-indigo-500 hover:shadow-[0_0_16px_rgba(217,70,239,0.45)]",
                 isSelected ? "scale-[1.01] ring-fuchsia-300" : "",
                 "focus:outline-none focus:ring-2 focus:ring-fuchsia-300",
               ].join(" ")}
-              aria-label={`${a.clientName} at ${formatTime(a.startTime)}`}
+              aria-label={`Chair ${a.chair ?? 1}: ${a.clientName} at ${formatTime(a.startTime)}`}
             >
               <div className="truncate text-[11px] font-extrabold leading-tight text-white">
                 {formatTime(a.startTime)} · {a.clientName}

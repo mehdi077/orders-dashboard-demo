@@ -24,6 +24,7 @@ type Props = {
   date: Date | null;
   appointments: Appointment[];
   businessHours: BusinessHours;
+  chairs: number;
   readOnly?: boolean;
   selectedAppointmentId?: string | null;
   onClose: () => void;
@@ -36,6 +37,7 @@ export function DayModal({
   date,
   appointments,
   businessHours,
+  chairs,
   readOnly,
   selectedAppointmentId,
   onClose,
@@ -111,6 +113,7 @@ export function DayModal({
             appointments={appointments}
             startHour={businessHours.startHour}
             endHour={businessHours.endHour}
+            chairs={chairs}
             selectedId={selectedAppointmentId ?? null}
             onSelectAppointment={onSelectAppointment}
           />
@@ -148,6 +151,7 @@ export function DayModal({
                 <AppointmentForm
                   day={date}
                   businessHours={businessHours}
+                  chairs={chairs}
                   dayAppointments={appointments}
                   onSubmit={async (args) => {
                     await onCreate(args);

@@ -28,6 +28,7 @@ type SubmitArgs = {
   phoneNumber: string;
   service?: string;
   notes?: string;
+  chair: number;
 };
 
 export default function BarberDemoPage() {
@@ -43,12 +44,14 @@ export default function BarberDemoPage() {
   const [panelAppointment, setPanelAppointment] = useState<Appointment | null>(null);
 
   const [businessHours, setBusinessHours] = useBusinessHours();
+  const chairs = 5;
 
   const monthGrid = useMemo(() => getMonthGrid(monthCursor), [monthCursor]);
   const appts = useQuery(api.barberAppointments.listScheduledInRange, {
     startTime: monthGrid.gridStart.getTime(),
     endTime: monthGrid.gridEndExclusive.getTime(),
   });
+  const settings = useQuery(api.barberAppointments.getBarberSettings, {});
 
   const create = useMutation(api.barberAppointments.create);
   const update = useMutation(api.barberAppointments.update);
@@ -180,6 +183,7 @@ export default function BarberDemoPage() {
                     appointments={dayAppts}
                     startHour={businessHours.startHour}
                     endHour={businessHours.endHour}
+                    chairs={5}
                   />
                 ) : null}
 
@@ -249,13 +253,19 @@ export default function BarberDemoPage() {
         </div>
       </section>
 
-      <BusinessHoursSettings value={businessHours} onChange={setBusinessHours} />
+      <BusinessHoursSettings
+        value={businessHours}
+        onChange={setBusinessHours}
+        chairs={chairs}
+        onChangeChairs={() => {}}
+      />
 
       <DayModal
         open={modalDate !== null}
         date={modalDate}
         appointments={modalAppts}
         businessHours={businessHours}
+        chairs={5}
         readOnly={modalDate !== null && modalDate < todayStart}
         selectedAppointmentId={liveSelectedAppt?._id ?? null}
         onClose={() => setModalDate(null)}

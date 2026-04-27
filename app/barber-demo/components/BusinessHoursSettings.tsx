@@ -9,9 +9,11 @@ const SLOT_OPTIONS = [10, 15, 20, 30, 45, 60];
 type Props = {
   value: BusinessHours;
   onChange: (v: BusinessHours) => void;
+  chairs?: number;
+  onChangeChairs?: (c: number) => void;
 };
 
-export function BusinessHoursSettings({ value, onChange }: Props) {
+export function BusinessHoursSettings({ value, onChange, chairs = 1, onChangeChairs }: Props) {
   function setStart(h: number) {
     const endHour = Math.max(h + 1, value.endHour);
     onChange({ ...value, startHour: h, endHour });
@@ -23,11 +25,18 @@ export function BusinessHoursSettings({ value, onChange }: Props) {
   function setSlot(m: number) {
     onChange({ ...value, slotMinutes: m });
   }
+  function setChairs(c: number) {
+    if (onChangeChairs) {
+      onChangeChairs(c);
+    }
+  }
 
   const selectCls =
     "mt-1 w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm font-semibold text-white outline-none transition focus:border-fuchsia-400/60 focus:ring-2 focus:ring-fuchsia-400/40";
   const labelCls =
     "text-[11px] font-bold uppercase tracking-widest text-slate-300";
+
+  const chairOptions = Array.from({ length: 10 }, (_, i) => i + 1);
 
   return (
     <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur sm:p-6">
@@ -45,11 +54,11 @@ export function BusinessHoursSettings({ value, onChange }: Props) {
         </div>
         <p className="text-[11px] font-semibold text-slate-400">
           {formatHourOption(value.startHour)} – {formatHourOption(value.endHour)} ·{" "}
-          {value.slotMinutes} min slots
+          {value.slotMinutes} min slots · {chairs} chair{chairs !== 1 ? "s" : ""}
         </p>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+      <div className="mt-4 grid gap-3 sm:grid-cols-4">
         <label className="block">
           <span className={labelCls}>Opens</span>
           <select
@@ -88,6 +97,20 @@ export function BusinessHoursSettings({ value, onChange }: Props) {
             {SLOT_OPTIONS.map((m) => (
               <option key={m} value={m}>
                 {m} min
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className={labelCls}>Chairs</span>
+          <select
+            className={selectCls}
+            value={chairs}
+            onChange={(e) => setChairs(Number(e.target.value))}
+          >
+            {chairOptions.map((c) => (
+              <option key={c} value={c}>
+                {c} chair{c !== 1 ? "s" : ""}
               </option>
             ))}
           </select>

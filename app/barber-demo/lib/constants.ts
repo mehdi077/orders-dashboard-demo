@@ -12,6 +12,7 @@ export function computeAvailableSlots(params: {
   durationMinutes: number;
   dayAppointments: Appointment[];
   excludeId: string | null;
+  chair?: number;
 }): { value: string; label: string; startTime: number }[] {
   const {
     day,
@@ -21,6 +22,7 @@ export function computeAvailableSlots(params: {
     durationMinutes,
     dayAppointments,
     excludeId,
+    chair = 1,
   } = params;
   const base = new Date(day.getFullYear(), day.getMonth(), day.getDate());
   const startMs = new Date(base).setHours(startHour, 0, 0, 0);
@@ -33,6 +35,7 @@ export function computeAvailableSlots(params: {
     const slotEnd = t + durationMs;
     const conflict = dayAppointments.some((a) => {
       if (excludeId && a._id === excludeId) return false;
+      if (a.chair !== chair) return false;
       return t < a.endTime && slotEnd > a.startTime;
     });
     if (conflict) continue;

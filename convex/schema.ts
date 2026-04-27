@@ -36,4 +36,45 @@ export default defineSchema({
   })
     .index("by_dayKey_and_status_and_startTime", ["dayKey", "status", "startTime"])
     .index("by_status_and_startTime", ["status", "startTime"]),
+
+  // PIN for app access (single-row table)
+  appPin: defineTable({
+    pin: v.string(),
+  }),
+
+  // Onboarding form submissions
+  onboardingForms: defineTable({
+    // Section 1: Basic Business Info
+    businessName: v.string(),
+    ownerFullName: v.string(),
+    shopPhoneNumber: v.string(),
+    shopAddress: v.string(),
+    businessEmail: v.string(),
+    websiteUrl: v.optional(v.string()),
+    // Section 2: Hours & Availability
+    hours: v.array(v.object({
+      day: v.string(),
+      isOpen: v.boolean(),
+      openTime: v.optional(v.string()),
+      closeTime: v.optional(v.string()),
+    })),
+    // Section 3: Services & Pricing
+    services: v.array(v.object({
+      name: v.string(),
+    })),
+    mentionPrices: v.boolean(),
+    prices: v.optional(v.array(v.object({
+      serviceName: v.string(),
+      price: v.string(),
+    }))),
+    // Section 4: Staff & Barbers
+    numberOfChairs: v.number(),
+    barberNames: v.array(v.string()),
+    // Section 5: Call Transfers
+    staffContacts: v.array(v.object({
+      name: v.string(),
+      phoneNumber: v.string(),
+    })),
+    submittedAt: v.number(),
+  }).index("by_submittedAt", ["submittedAt"]),
 });

@@ -9,7 +9,9 @@
  */
 
 import type * as barberAppointments from "../barberAppointments.js";
+import type * as onboardingForms from "../onboardingForms.js";
 import type * as orders from "../orders.js";
+import type * as pin from "../pin.js";
 
 import type {
   ApiFromModules,
@@ -19,7 +21,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   barberAppointments: typeof barberAppointments;
+  onboardingForms: typeof onboardingForms;
   orders: typeof orders;
+  pin: typeof pin;
 }>;
 
 /**

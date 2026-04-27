@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ConvexClientProvider } from "./ConvexClientProvider";
+import { PinAuthGuard } from "./components/PinAuthGuard";
 
 export const metadata: Metadata = {
   title: "Orders Dashboard",
@@ -22,7 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-neutral-100 text-neutral-900 antialiased">
-        <ConvexClientProvider>{children}</ConvexClientProvider>
+        <ConvexClientProvider>
+          <PinAuthGuard>{children}</PinAuthGuard>
+        </ConvexClientProvider>
       </body>
     </html>
   );

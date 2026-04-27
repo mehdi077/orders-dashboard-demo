@@ -15,10 +15,10 @@ export default defineSchema({
 
   // barberSettings: single row to store shop configuration
   barberSettings: defineTable({
-    chairs: v.number().min(1).max(20),
-    startHour: v.number().min(0).max(23),
-    endHour: v.number().min(1).max(24),
-    slotMinutes: v.number().min(5).max(120),
+    chairs: v.number(),
+    startHour: v.number(),
+    endHour: v.number(),
+    slotMinutes: v.number(),
   }),
 
   barberAppointments: defineTable({
@@ -29,7 +29,7 @@ export default defineSchema({
     phoneNumber: v.optional(v.string()),
     service: v.optional(v.string()),
     notes: v.optional(v.string()),
-    chair: v.number().optional(),
+    chair: v.optional(v.number()),
     status: v.union(v.literal("scheduled"), v.literal("cancelled")),
     createdAt: v.number(),
     updatedAt: v.number(),

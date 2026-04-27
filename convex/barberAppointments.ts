@@ -26,8 +26,9 @@ function overlaps(
   return a.startTime < b.endTime && a.endTime > b.startTime;
 }
 
-function getBarberSettings(ctx: any) {
-  return ctx.db.get("barberSettings");
+async function fetchSettingsDoc(ctx: any) {
+  const rows = await ctx.db.query("barberSettings").take(1);
+  return rows[0] ?? null;
 }
 
 export const listScheduledInRange = query({
@@ -71,10 +72,10 @@ export const getById = query({
 
 export const getBarberSettings = query({
   args: {},
-  handler: async (ctx, args) => {
-    const settings = await ctx.db.get("barberSettings");
+  handler: async (ctx, _args) => {
+    const rows = await ctx.db.query("barberSettings").take(1);
+    const settings = rows[0] ?? null;
     if (!settings) {
-      // Return default settings if none exist
       return {
         chairs: 1,
         startHour: 8,
@@ -88,13 +89,18 @@ export const getBarberSettings = query({
 
 export const updateBarberSettings = mutation({
   args: {
-    chairs: v.number().min(1).max(20),
-    startHour: v.number().min(0).max(23),
-    endHour: v.number().min(1).max(24),
-    slotMinutes: v.number().min(5).max(120),
+    chairs: v.number(),
+    startHour: v.number(),
+    endHour: v.number(),
+    slotMinutes: v.number(),
   },
   handler: async (ctx, args) => {
-    const settings = await ctx.db.get("barberSettings");
+    if (args.chairs < 1 || args.chairs > 20) throw new Error("Chairs must be between 1 and 20.");
+    if (args.startHour < 0 || args.startHour > 23) throw new Error("Start hour must be 0-23.");
+    if (args.endHour < 1 || args.endHour > 24) throw new Error("End hour must be 1-24.");
+    if (args.slotMinutes < 5 || args.slotMinutes > 120) throw new Error("Slot minutes must be 5-120.");
+    const existing = await ctx.db.query("barberSettings").take(1);
+    const settings = existing[0] ?? null;
     if (!settings) {
       return await ctx.db.insert("barberSettings", {
         chairs: args.chairs,
@@ -134,7 +140,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
     startTime: v.number(),
     durationMinutes: v.number(),
-    chair: v.number().min(1).optional(),
+    chair: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     assertValidDurationMinutes(args.durationMinutes);
@@ -143,7 +149,7 @@ export const create = mutation({
     const endTime = args.startTime + args.durationMinutes * 60_000;
     assertValidTimes(args.startTime, endTime);
 
-    const settings = await getBarberSettings(ctx);
+    const settings = await fetchSettingsDoc(ctx);
     const maxChairs = settings ? settings.chairs : 1;
     const chairNum = args.chair ?? 1;
     if (chairNum < 1 || chairNum > maxChairs) {
@@ -190,7 +196,7 @@ export const update = mutation({
     notes: v.optional(v.string()),
     startTime: v.number(),
     durationMinutes: v.number(),
-    chair: v.number().min(1).optional(),
+    chair: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const current = await ctx.db.get(args.id);
@@ -205,7 +211,7 @@ export const update = mutation({
     const endTime = args.startTime + args.durationMinutes * 60_000;
     assertValidTimes(args.startTime, endTime);
 
-    const settings = await getBarberSettings(ctx);
+    const settings = await fetchSettingsDoc(ctx);
     const maxChairs = settings ? settings.chairs : 1;
     const chairNum = args.chair ?? (current.chair ?? 1);
     if (chairNum < 1 || chairNum > maxChairs) {

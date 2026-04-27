@@ -16,7 +16,7 @@ import { DayTimelineVerticalMini } from "./components/DayTimelineVerticalMini";
 import { DayModal } from "./components/DayModal";
 import { AppointmentSidePanel } from "./components/AppointmentSidePanel";
 import { BusinessHoursSettings } from "./components/BusinessHoursSettings";
-import { formatHourOption, useBusinessHours } from "./lib/businessHours";
+import { type BusinessHours, formatHourOption } from "./lib/businessHours";
 import type { Id } from "../../convex/_generated/dataModel";
 
 type SubmitArgs = {
@@ -31,6 +31,13 @@ type SubmitArgs = {
   chair: number;
 };
 
+const DEFAULT_SETTINGS = {
+  chairs: 5,
+  startHour: 8,
+  endHour: 20,
+  slotMinutes: 30,
+};
+
 export default function BarberDemoPage() {
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
   const today = useMemo(() => new Date(), []);
@@ -43,19 +50,34 @@ export default function BarberDemoPage() {
   const [modalDate, setModalDate] = useState<Date | null>(null);
   const [panelAppointment, setPanelAppointment] = useState<Appointment | null>(null);
 
-  const [businessHours, setBusinessHours] = useBusinessHours();
-  const chairs = 5;
-
   const monthGrid = useMemo(() => getMonthGrid(monthCursor), [monthCursor]);
   const appts = useQuery(api.barberAppointments.listScheduledInRange, {
     startTime: monthGrid.gridStart.getTime(),
     endTime: monthGrid.gridEndExclusive.getTime(),
   });
+
   const settings = useQuery(api.barberAppointments.getBarberSettings, {});
+  const updateSettings = useMutation(api.barberAppointments.updateBarberSettings);
 
   const create = useMutation(api.barberAppointments.create);
   const update = useMutation(api.barberAppointments.update);
   const cancel = useMutation(api.barberAppointments.cancel);
+
+  const chairs = settings?.chairs ?? DEFAULT_SETTINGS.chairs;
+  const businessHours: BusinessHours = useMemo(() => ({
+    startHour: settings?.startHour ?? DEFAULT_SETTINGS.startHour,
+    endHour: settings?.endHour ?? DEFAULT_SETTINGS.endHour,
+    slotMinutes: settings?.slotMinutes ?? DEFAULT_SETTINGS.slotMinutes,
+  }), [settings]);
+
+  function handleUpdateSettings(next: BusinessHours & { chairs: number }) {
+    updateSettings({
+      chairs: next.chairs,
+      startHour: next.startHour,
+      endHour: next.endHour,
+      slotMinutes: next.slotMinutes,
+    });
+  }
 
   const apptsByDayKey = useMemo(() => {
     const map = new Map<string, Appointment[]>();
@@ -183,7 +205,7 @@ export default function BarberDemoPage() {
                     appointments={dayAppts}
                     startHour={businessHours.startHour}
                     endHour={businessHours.endHour}
-                    chairs={5}
+                    chairs={chairs}
                   />
                 ) : null}
 
@@ -255,9 +277,9 @@ export default function BarberDemoPage() {
 
       <BusinessHoursSettings
         value={businessHours}
-        onChange={setBusinessHours}
+        onChange={(bh) => handleUpdateSettings({ ...bh, chairs })}
         chairs={chairs}
-        onChangeChairs={() => {}}
+        onChangeChairs={(c) => handleUpdateSettings({ ...businessHours, chairs: c })}
       />
 
       <DayModal
@@ -265,7 +287,7 @@ export default function BarberDemoPage() {
         date={modalDate}
         appointments={modalAppts}
         businessHours={businessHours}
-        chairs={5}
+        chairs={chairs}
         readOnly={modalDate !== null && modalDate < todayStart}
         selectedAppointmentId={liveSelectedAppt?._id ?? null}
         onClose={() => setModalDate(null)}
@@ -278,6 +300,7 @@ export default function BarberDemoPage() {
         appointment={liveSelectedAppt}
         businessHours={businessHours}
         dayAppointments={panelDayAppts}
+        chairs={chairs}
         transparentBackdrop={modalDate !== null}
         onClose={() => setPanelAppointment(null)}
         onUpdate={handleUpdate}

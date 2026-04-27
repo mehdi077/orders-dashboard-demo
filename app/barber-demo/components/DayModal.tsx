@@ -80,7 +80,7 @@ export function DayModal({
       <div
         role="dialog"
         aria-modal="true"
-        className={`relative flex max-h-[90vh] w-full max-w-md transform flex-col rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/95 to-slate-950/95 p-6 shadow-2xl transition-all duration-200 ${
+        className={`relative flex max-h-[90vh] w-full max-w-2xl transform flex-col rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/95 to-slate-950/95 p-6 shadow-2xl transition-all duration-200 ${
           open ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >

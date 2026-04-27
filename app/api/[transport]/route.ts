@@ -136,7 +136,7 @@ const mcpHandler = createMcpHandler(
 
     const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
     const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
-    const DEFAULT_BARBER_HOURS = {
+    const FALLBACK_BARBER_HOURS = {
       startHour: 8,
       endHour: 20,
       slotMinutes: 30,
@@ -171,7 +171,7 @@ const mcpHandler = createMcpHandler(
     const timeSchema = z
       .string()
       .min(1)
-      .describe("Time in HH:MM 24-hour format (e.g., '14:30').");
+      .describe("Time in HH:MM 24-hour format in New York / Eastern Time (e.g., '14:30' for 2:30 PM ET).");
 
     const phoneNumberSchema = z
       .string()
@@ -210,7 +210,7 @@ const mcpHandler = createMcpHandler(
 
     server.tool(
       "barber_list_day_appointments",
-      "List all scheduled barber appointments for a given calendar date (YYYY-MM-DD), sorted by start time.",
+      "List all scheduled barber appointments for a given calendar date (YYYY-MM-DD), sorted by start time. Each appointment includes a 'chair' field indicating which chair it is booked on. Call barber_get_business_hours first to learn the total number of chairs.",
       {
         date: dateSchema.describe("The day to list, in YYYY-MM-DD format."),
       },
@@ -221,12 +221,14 @@ const mcpHandler = createMcpHandler(
           api.barberAppointments.listScheduledForDay,
           { dayKey: normalizedDate },
         );
+        const settings = await convex.query(api.barberAppointments.getBarberSettings, {});
+        const chairs = settings?.chairs ?? 1;
         return {
           content: [
             {
               type: "text",
               text: JSON.stringify(
-                { dayKey: date, count: appts.length, appointments: appts },
+                { dayKey: date, chairs, count: appts.length, appointments: appts },
                 null,
                 2,
               ),
@@ -308,10 +310,10 @@ const mcpHandler = createMcpHandler(
 
     server.tool(
       "barber_create_appointment",
-      "Book a new barber appointment. Rejects if the time overlaps an existing scheduled appointment on that day for the same chair. Phone number is required.",
+      "Book a new barber appointment. The shop has multiple chairs — each chair has an independent schedule, so two appointments can overlap if they are on different chairs. IMPORTANT: Call barber_get_business_hours first to learn the number of chairs and valid chair numbers. If you don't specify a chair, it defaults to chair 1. To find an open slot on any chair, use barber_next_available_slot first and use the returned 'chair' value. Times are in New York / Eastern Time. Rejects if the time overlaps an existing appointment on the same chair. Phone number is required.",
       {
         date: dateSchema.describe("Day to book, in YYYY-MM-DD format. Accepts Y-M-D or YYYY-M-D formats."),
-        time: timeSchema.describe("Start time, 24-hour HH:MM (e.g. '14:30'). Accepts H:MM or HH:M formats."),
+        time: timeSchema.describe("Start time in New York / Eastern Time, 24-hour HH:MM (e.g. '14:30'). Accepts H:MM or HH:M formats."),
         durationMinutes: z
           .number()
           .int()
@@ -331,7 +333,7 @@ const mcpHandler = createMcpHandler(
           .min(1)
           .max(20)
           .optional()
-          .describe("Optional chair number (1-20). If omitted, the first available chair is used."),
+          .describe("Chair number to book (1 to total chairs). Defaults to chair 1 if omitted. Call barber_get_business_hours to learn the valid range."),
       },
       async ({
         date,
@@ -398,11 +400,11 @@ const mcpHandler = createMcpHandler(
 
     server.tool(
       "barber_update_appointment",
-      "Reschedule or edit an existing barber appointment. Supply the id plus the full set of fields you want the appointment to end up with. Overlap validation is applied, excluding the appointment itself.",
+      "Reschedule or edit an existing barber appointment. Supply the id plus the full set of fields you want the appointment to end up with. If chair is omitted, the appointment keeps its current chair. Overlap validation is applied on the target chair, excluding the appointment itself. Times are in New York / Eastern Time.",
       {
         id: z.string().min(1).describe("The appointment's Convex id."),
         date: dateSchema.describe("Day for the updated appointment, YYYY-MM-DD."),
-        time: timeSchema.describe("Updated start time, HH:MM (24-hour)."),
+        time: timeSchema.describe("Updated start time in New York / Eastern Time, HH:MM (24-hour)."),
         durationMinutes: z
           .number()
           .int()
@@ -419,7 +421,7 @@ const mcpHandler = createMcpHandler(
           .min(1)
           .max(20)
           .optional()
-          .describe("Optional chair number (1-20)."),
+          .describe("Chair number (1 to total chairs). If omitted, keeps the appointment's current chair."),
       },
       async ({
         id,
@@ -442,7 +444,15 @@ const mcpHandler = createMcpHandler(
         const startTime = dateTimeToTimestamp(normalizedDate, normalizedTime);
         const trimmedService = service?.trim();
         const trimmedNotes = notes?.trim();
-        const chairNum = chair ?? 1;
+        
+        // Fetch current appointment to preserve chair if not specified
+        const current = await convex.query(api.barberAppointments.getById, {
+          id: id as Id<"barberAppointments">,
+        });
+        if (!current) {
+          throw new Error("Appointment not found.");
+        }
+        const chairNum = chair ?? (current.chair ?? 1);
         
         const settings = await convex.query(api.barberAppointments.getBarberSettings, {});
         const maxChairs = settings ? settings.chairs : 1;
@@ -510,7 +520,7 @@ const mcpHandler = createMcpHandler(
 
     server.tool(
       "barber_next_available_slot",
-      "Find the first free time slot on a given date that fits the requested duration, respecting the shop's business hours and existing appointments.",
+      "Find the first free time slot on a given date that fits the requested duration, respecting the shop's business hours and existing appointments across all chairs. Returns the available time, the chair number, and business hours. Use the returned 'chair' value when calling barber_create_appointment. Checks each chair in order (1, 2, ...) and returns the first free slot on the earliest available chair.",
       {
         date: dateSchema.describe("Day to search, in YYYY-MM-DD format. Accepts Y-M-D or YYYY-M-D formats."),
         durationMinutes: z
@@ -534,7 +544,13 @@ const mcpHandler = createMcpHandler(
           { dayKey: normalizedDate },
         );
 
-        const { startHour, endHour, slotMinutes } = DEFAULT_BARBER_HOURS;
+        const settings = await convex.query(api.barberAppointments.getBarberSettings, {});
+        const bh = {
+          startHour: settings?.startHour ?? FALLBACK_BARBER_HOURS.startHour,
+          endHour: settings?.endHour ?? FALLBACK_BARBER_HOURS.endHour,
+          slotMinutes: settings?.slotMinutes ?? FALLBACK_BARBER_HOURS.slotMinutes,
+        };
+        const { startHour, endHour, slotMinutes } = bh;
         const openMs = dateTimeToTimestamp(
           normalizedDate,
           `${String(startHour).padStart(2, "0")}:00`,
@@ -549,12 +565,20 @@ const mcpHandler = createMcpHandler(
         const durationMs = durationMinutes * 60_000;
         const stepMs = slotMinutes * 60_000;
 
+        const chairs = settings?.chairs ?? 1;
+
         for (let t = floor; t + durationMs <= closeMs; t += stepMs) {
           const slotEnd = t + durationMs;
-          const conflict = appts.some((a) =>
-            overlaps({ startTime: t, endTime: slotEnd }, a),
+          // Find chairs that are busy during this slot
+          const busyChairs = new Set(
+            appts
+              .filter((a) => overlaps({ startTime: t, endTime: slotEnd }, a))
+              .map((a) => a.chair ?? 1),
           );
-          if (!conflict) {
+          const freeChair = Array.from({ length: chairs }, (_, i) => i + 1).find(
+            (c) => !busyChairs.has(c),
+          );
+          if (freeChair) {
             return {
               content: [
                 {
@@ -566,7 +590,8 @@ const mcpHandler = createMcpHandler(
                       time: timestampToTime(t),
                       startTime: t,
                       durationMinutes,
-                      businessHours: DEFAULT_BARBER_HOURS,
+                      chair: freeChair,
+                      businessHours: bh,
                     },
                     null,
                     2,
@@ -586,7 +611,7 @@ const mcpHandler = createMcpHandler(
                   ok: false,
                   dayKey: normalizedDate,
                   error: "No slot available for that duration on this date.",
-                  businessHours: DEFAULT_BARBER_HOURS,
+                  businessHours: bh,
                 },
                 null,
                 2,
@@ -599,9 +624,15 @@ const mcpHandler = createMcpHandler(
 
     server.tool(
       "barber_get_business_hours",
-      "Read the barber shop's default business hours. These are the hours the scheduler and availability tools use.",
+      "Read the barber shop's full configuration: business hours (open/close), booking slot size, and total number of chairs. ALWAYS call this before booking to learn valid chair numbers (1 to chairs) and the shop's operating hours. Times are in New York / Eastern Time.",
       {},
       async () => {
+        const convex = getConvexClient();
+        const settings = await convex.query(api.barberAppointments.getBarberSettings, {});
+        const sh = settings?.startHour ?? FALLBACK_BARBER_HOURS.startHour;
+        const eh = settings?.endHour ?? FALLBACK_BARBER_HOURS.endHour;
+        const sm = settings?.slotMinutes ?? FALLBACK_BARBER_HOURS.slotMinutes;
+        const ch = settings?.chairs ?? 1;
         return {
           content: [
             {
@@ -609,10 +640,11 @@ const mcpHandler = createMcpHandler(
               text: JSON.stringify(
                 {
                   ok: true,
-                  startHour: DEFAULT_BARBER_HOURS.startHour,
-                  endHour: DEFAULT_BARBER_HOURS.endHour,
-                  slotMinutes: DEFAULT_BARBER_HOURS.slotMinutes,
-                  description: `Open ${DEFAULT_BARBER_HOURS.startHour}:00 to ${DEFAULT_BARBER_HOURS.endHour}:00 with ${DEFAULT_BARBER_HOURS.slotMinutes}-minute booking slots.`,
+                  startHour: sh,
+                  endHour: eh,
+                  slotMinutes: sm,
+                  chairs: ch,
+                  description: `Open ${sh}:00 to ${eh}:00 with ${sm}-minute booking slots and ${ch} chair${ch !== 1 ? "s" : ""}.`,
                 },
                 null,
                 2,

@@ -24,15 +24,15 @@ export function DayTimelineVertical({
   chairs,
   selectedId,
   onSelectAppointment,
-  hourHeight = 44,
+  hourHeight = 48,
 }: Props) {
   const workHours = Math.max(1, endHour - startHour);
   const totalHeight = workHours * hourHeight;
   const hours = Array.from({ length: workHours }, (_, i) => startHour + i);
-  const chairWidth = 100 / chairs;
 
   return (
     <div className="relative w-full" style={{ height: totalHeight }}>
+      {/* Hour labels column */}
       <div className="absolute left-0 top-0 bottom-0 w-12">
         {hours.map((h) => (
           <div
@@ -45,12 +45,14 @@ export function DayTimelineVertical({
         ))}
       </div>
 
+      {/* Grid area */}
       <div className="absolute left-12 right-0 top-0 bottom-0 overflow-hidden rounded-xl bg-white/[0.02] ring-1 ring-inset ring-white/5">
+        {/* Horizontal hour lines */}
         {hours.slice(1).map((h) => {
           const top = (h - startHour) * hourHeight;
           return (
             <div
-              key={h}
+              key={`h-${h}`}
               className={`absolute left-0 right-0 h-px ${
                 h === 12 ? "bg-white/15" : "bg-white/[0.05]"
               }`}
@@ -59,6 +61,38 @@ export function DayTimelineVertical({
           );
         })}
 
+        {/* Vertical chair divider lines */}
+        {Array.from({ length: chairs - 1 }, (_, i) => {
+          const left = ((i + 1) / chairs) * 100;
+          return (
+            <div
+              key={`v-${i}`}
+              className="absolute top-0 bottom-0 w-px bg-white/[0.07]"
+              style={{ left: `${left}%` }}
+            />
+          );
+        })}
+
+        {/* Chair header labels */}
+        {Array.from({ length: chairs }, (_, i) => {
+          const left = (i / chairs) * 100;
+          const width = 100 / chairs;
+          return (
+            <div
+              key={`ch-${i}`}
+              className="absolute top-0 flex items-center justify-center text-[9px] font-bold uppercase tracking-widest text-slate-500"
+              style={{
+                left: `${left}%`,
+                width: `${width}%`,
+                height: 18,
+              }}
+            >
+              {i + 1}
+            </div>
+          );
+        })}
+
+        {/* Appointment blocks */}
         {appointments.map((a) => {
           const startDt = new Date(a.startTime);
           const startHours = hourFractionFromDate(startDt);
@@ -68,8 +102,9 @@ export function DayTimelineVertical({
           const height = Math.max(22, Math.min(totalHeight - top, rawHeight));
           const isSelected = selectedId && a._id === selectedId;
           const chairIndex = (a.chair ?? 1) - 1;
-          const left = chairIndex * chairWidth;
-          const width = chairWidth - 2;
+          const colWidth = 100 / chairs;
+          const left = chairIndex * colWidth;
+          const width = colWidth - 2;
 
           return (
             <button
@@ -81,7 +116,7 @@ export function DayTimelineVertical({
               }}
               style={{ top, height, left: `${left}%`, width: `${width}%` }}
               className={[
-                "group absolute overflow-hidden rounded-lg px-2.5 py-1 text-left shadow-md ring-1 transition-all duration-150",
+                "group absolute overflow-hidden rounded-lg px-2 py-1 text-left shadow-md ring-1 transition-all duration-150",
                 "bg-gradient-to-r from-fuchsia-600/85 to-indigo-600/85 ring-white/20 hover:from-fuchsia-500 hover:to-indigo-500 hover:shadow-[0_0_16px_rgba(217,70,239,0.45)]",
                 isSelected ? "scale-[1.01] ring-fuchsia-300" : "",
                 "focus:outline-none focus:ring-2 focus:ring-fuchsia-300",
@@ -89,11 +124,11 @@ export function DayTimelineVertical({
               aria-label={`Chair ${a.chair ?? 1}: ${a.clientName} at ${formatTime(a.startTime)}`}
             >
               <div className="truncate text-[11px] font-extrabold leading-tight text-white">
-                {formatTime(a.startTime)} · {a.clientName}
+                {a.clientName}
               </div>
-              {height >= 38 ? (
+              {height >= 30 ? (
                 <div className="truncate text-[10px] leading-tight text-white/80">
-                  {a.service || `${Math.round((a.endTime - a.startTime) / 60_000)} min`}
+                  {formatTime(a.startTime)} · {a.service || `${Math.round((a.endTime - a.startTime) / 60_000)} min`}
                 </div>
               ) : null}
             </button>

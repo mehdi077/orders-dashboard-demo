@@ -23,6 +23,7 @@ type Props = {
   appointment: Appointment | null;
   businessHours: BusinessHours;
   dayAppointments: Appointment[];
+  chairs?: number;
   transparentBackdrop?: boolean;
   onClose: () => void;
   onUpdate: (args: SubmitArgs) => Promise<void>;
@@ -34,6 +35,7 @@ export function AppointmentSidePanel({
   appointment,
   businessHours,
   dayAppointments,
+  chairs = 1,
   transparentBackdrop,
   onClose,
   onUpdate,
@@ -108,6 +110,10 @@ export function AppointmentSidePanel({
                     )} min`}
                   />
                   <Field
+                    label="Chair"
+                    value={`Chair ${appointment.chair ?? 1}`}
+                  />
+                  <Field
                     label="Service"
                     value={appointment.service || "—"}
                   />
@@ -152,6 +158,7 @@ export function AppointmentSidePanel({
                   day={new Date(appointment.startTime)}
                   initial={appointment}
                   businessHours={businessHours}
+                  chairs={chairs}
                   dayAppointments={dayAppointments}
                   onSubmit={async (args) => {
                     await onUpdate(args);
